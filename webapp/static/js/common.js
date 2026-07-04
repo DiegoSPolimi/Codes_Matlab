@@ -28,15 +28,15 @@ async function apiUpload(files, kind) {
   return data.files;
 }
 
-// Dark Plotly layout shared by all charts.
+// Cupertino light Plotly layout shared by all charts.
 const PLOT_LAYOUT = {
   paper_bgcolor: "rgba(0,0,0,0)",
   plot_bgcolor: "rgba(0,0,0,0)",
-  font: { color: "#e6edf3", size: 12 },
+  font: { color: "#1c1c1e", size: 12, family: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif" },
   margin: { l: 50, r: 16, t: 10, b: 40 },
   legend: { orientation: "h", y: 1.15 },
-  xaxis: { gridcolor: "#2c3d4f", zerolinecolor: "#3a4d61" },
-  yaxis: { gridcolor: "#2c3d4f", zerolinecolor: "#3a4d61" },
+  xaxis: { gridcolor: "#e5e5ea", zerolinecolor: "#d1d1d6", linecolor: "#d1d1d6" },
+  yaxis: { gridcolor: "#e5e5ea", zerolinecolor: "#d1d1d6", linecolor: "#d1d1d6" },
 };
 const PLOT_CONFIG = { responsive: true, displaylogo: false };
 
