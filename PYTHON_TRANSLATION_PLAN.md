@@ -49,6 +49,23 @@ exactly which block is "live" per file.
   conversion by hand to match MATLAB's `quat2rotm`/`quaternion`/`rotmat`
   behavior. Get this wrong and every downstream angle is wrong but
   plausible-looking — validate numerically (see Section 7).
+- **CONVENTION LOCKED (confirmed while building the reference generator):**
+  the repo uses `quat2rotm(q)` (in `computeStaticCalibration`) and
+  `rotmat(quaternion(q),'point')` (in `computeSegmentOrientation`). Both are
+  the **standard ACTIVE rotation matrix from a scalar-first unit quaternion**,
+  i.e. the explicit matrix:
+  `R = [[1-2(y²+z²), 2(xy-wz), 2(xz+wy)], [2(xy+wz), 1-2(x²+z²), 2(yz-wx)], [2(xz-wy), 2(yz+wx), 1-2(x²+y²)]]`.
+  The Python equivalent is `Rotation.from_quat([x,y,z,w]).as_matrix()` (after
+  the scalar-first→scalar-last reorder) — SciPy's `as_matrix()` is active, so
+  it matches `'point'`/`quat2rotm`. Centralize this one function in
+  `quaternion.py` and test it against the explicit formula above.
+- **Toolbox dependency:** `quat2rotm`/`quaternion`/`rotmat` require MATLAB's
+  Robotics/Navigation/UAV Toolbox, which the user does **not** have. This
+  means the original `.m` pipeline is not runnable end-to-end on the user's
+  machine as-is; the Python port removes that dependency (NumPy/SciPy only),
+  which is a real benefit to call out. The reference generator
+  (`generate_reference.m`) reproduces the two conversions with plain math
+  (`local_q2R`) so golden files can still be produced toolbox-free.
 - Sensor name prefixes encode the body segment and are used for file
   matching: `S2` = pelvis/sacrum, `LT`/`RT` = left/right thigh, `LShank`
   (right shank never appears in current scripts, only left), `LFoot`
