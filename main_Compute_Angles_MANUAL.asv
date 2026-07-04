@@ -1,0 +1,253 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% MAIN_LOWERLIMBANGLES_MANUAL.M
+%
+% Manual Lower Limb Joint Angle Computation (Hip & Pelvis 3D Angles)
+% Tailored for manual selection of movement CSV files with pedalling cycle 
+% segmentation, time-normalization, and ensemble plotting.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clear
+clc
+close all
+Fs = 60;
+
+%% ===================================================================== %%
+% INTERACTIVE FOLDER SELECTION & SETUP
+%% ===================================================================== %%
+dataFolder = uigetdir(pwd, 'Select the folder containing CalibrationResults.mat');
+if dataFolder == 0
+    error('No data folder selected. Script aborted.');
+end
+calibrationPath = fullfile(dataFolder, 'CalibrationResults.mat');
+if ~exist(calibrationPath, 'file')
+    error('Could not find CalibrationResults.mat in the selected folder. Run calibration first.');
+end
+load(calibrationPath, 'Calibration');
+
+%% ===================================================================== %%
+% LOAD MOVEMENT FILES MANUALLY
+%% ===================================================================== %%
+disp('-------------------------------------------')
+disp('MANUALLY SELECTING MOVEMENT FILES')
+disp('-------------------------------------------')
+
+% --- Pelvis ---
+[filePelvis, pathPelvis] = uigetfile(fullfile(dataFolder, '*.csv'), 'Select the Pelvis (S2) Synchronized CSV File');
+if filePelvis == 0, error('Pelvis file selection canceled. Script aborted.'); end
+fprintf('Loading Manual Pelvis -> %s\n', filePelvis);
+Pelvis = loadCleanIMUcsv(fullfile(pathPelvis, filePelvis));
+
+% --- Left Thigh ---
+[fileLThigh, pathLThigh] = uigetfile(fullfile(dataFolder, '*.csv'), 'Select the Left Thigh (LT) Synchronized CSV File');
+if fileLThigh == 0, error('Left Thigh file selection canceled. Script aborted.'); end
+fprintf('Loading Manual LThigh -> %s\n', fileLThigh);
+LThigh = loadCleanIMUcsv(fullfile(pathLThigh, fileLThigh));
+
+disp('All selected segments successfully loaded.');
+
+%% ===================================================================== %%
+% SEGMENT ORIENTATIONS (Converting Sensor to Anatomical Frames)
+%% ===================================================================== %%
+% Compute Anatomical Pelvis Orientation
+Rpelvis = computeSegmentOrientation(Pelvis.Quat, Calibration.S2.RsegSens); 
+
+% Compute Anatomical Left Thigh Orientation (Matches 'LT' mapping structure)
+RLthigh = computeSegmentOrientation(LThigh.Quat, Calibration.LT.RsegSens);
+
+%% ===================================================================== %%
+% JOINT ANGLE COMPUTATION (HIP & PELVIS GLOBAL)
+%% ===================================================================== %%
+disp('Computing Hip and Pelvis Kinematics...');
+LHip = computeHipJCS(Rpelvis, RLthigh); 
+
+% Compute Pelvis Angles relative to Global Frame (matching your structural convention)
+PelvisGlobal = computePelvisGlobalAngles(Rpelvis);
+
+%% ===================================================================== %%
+% CYCLE SEGMENTATION & TIME-NORMALIZATION (PEDALLING)
+%% ===================================================================== %%
+% Extract Hip Flexion for cycle segmentation (When minimum/max flexed = TDC)
+hipFlexion = double(LHip.FlexExt); 
+
+% Find local minima (maximum flexion points)
+[~, troughIndices] = findpeaks(-hipFlexion, 'MinPeakDistance', 40, 'MinPeakProminence', 2);
+
+numCycles = length(troughIndices) - 1;
+if numCycles < 2
+    error('Not enough pedalling cycles detected. Check the findpeaks settings.');
+end
+
+% Initialize normalized matrices (0 to 100% cycle, sampled at 101 points)
+tNorm = linspace(0, 100, 101)';
+xConf = [tNorm'; flipud(tNorm)']; 
+
+normHip.FlexExt = zeros(101, numCycles);
+normHip.AbdAdd  = zeros(101, numCycles);
+normHip.IntExt  = zeros(101, numCycles);
+
+normPelvis.Tilt      = zeros(101, numCycles);
+normPelvis.Obliquity = zeros(101, numCycles);
+normPelvis.Rotation  = zeros(101, numCycles);
+
+% Extract and interpolate each individual cycle
+for c = 1:numCycles
+    idxStart = troughIndices(c);
+    idxEnd = troughIndices(c+1);
+    cycleLen = idxEnd - idxStart + 1;
+    
+    % Raw cycle timeline
+    tRaw = linspace(0, 100, cycleLen)';
+    
+    % Interpolate Hip Angles structural fields
+    normHip.FlexExt(:, c) = interp1(tRaw, double(LHip.FlexExt(idxStart:idxEnd)), tNorm, 'spline');
+    normHip.AbdAdd(:, c)  = interp1(tRaw, double(LHip.AbdAdd(idxStart:idxEnd)), tNorm, 'spline');
+    normHip.IntExt(:, c)  = interp1(tRaw, double(LHip.IntExt(idxStart:idxEnd)), tNorm, 'spline');
+    
+    % Interpolate Pelvis Angles structural fields
+    normPelvis.Tilt(:, c)      = interp1(tRaw, double(PelvisGlobal.Tilt(idxStart:idxEnd)), tNorm, 'spline');
+    normPelvis.Obliquity(:, c) = interp1(tRaw, double(PelvisGlobal.Obliquity(idxStart:idxEnd)), tNorm, 'spline');
+    normPelvis.Rotation(:, c)  = interp1(tRaw, double(PelvisGlobal.Rotation(idxStart:idxEnd)), tNorm, 'spline');
+end
+
+% Compute Means and Standard Deviations across the columns (dimension 2)
+meanHip.FlexExt = mean(normHip.FlexExt, 2); stdHip.FlexExt = std(normHip.FlexExt, 0, 2);
+meanHip.AbdAdd  = mean(normHip.AbdAdd, 2);  stdHip.AbdAdd  = std(normHip.AbdAdd, 0, 2);
+meanHip.IntExt  = mean(normHip.IntExt, 2);  stdHip.IntExt  = std(normHip.IntExt, 0, 2);
+
+meanPelvis.Tilt      = mean(normPelvis.Tilt, 2);      stdPelvis.Tilt      = std(normPelvis.Tilt, 0, 2);
+meanPelvis.Obliquity = mean(normPelvis.Obliquity, 2); stdPelvis.Obliquity = std(normPelvis.Obliquity, 0, 2);
+meanPelvis.Rotation  = mean(normPelvis.Rotation, 2);  stdPelvis.Rotation  = std(normPelvis.Rotation, 0, 2);
+
+%% ===================================================================== %%
+% VISUALIZATION & PLOTTING (JOURNAL QUALITY)
+%% ===================================================================== %%
+
+% --- Plot Left Hip Angles ---
+figure('Name', 'Left Hip Joint Kinematics (Pedalling Cycles)', 'Color', 'w');
+hipFields = {'FlexExt', 'AbdAdd', 'IntExt'};
+hipLabels = {'Flexion (+)/Extension (-)', 'Adduction (+)/Abduction (-)', 'Internal (+)/External (-) Rotation'};
+
+for i = 1:3
+    subplot(3, 1, i);
+    hold on;
+    fName = hipFields{i};
+    
+    % 1. Plot individual cycles in gray
+    plot(tNorm, normHip.(fName), 'Color', [0.75 0.75 0.75], 'LineWidth', 0.5);
+    
+    % 2. Plot Standard Deviation Shaded Region
+    curve1 = meanHip.(fName) + stdHip.(fName);
+    curve2 = meanHip.(fName) - stdHip.(fName);
+    yConf = [curve1'; flipud(curve2)'];
+    fill(xConf, yConf, [0.85 0.85 0.85], 'FaceAlpha', 0.5, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+    
+    % 3. Plot Mean Curve in Bold Black
+    plot(tNorm, meanHip.(fName), 'k', 'LineWidth', 2.5);
+    
+    title(hipLabels{i});
+    xlabel('Pedalling Cycle (%)');
+    ylabel('Angle (deg)');
+    xlim([0 100]);
+    grid on;
+    if i == 1, legend('Individual Cycles', 'Mean Cycle', 'Location', 'best'); end
+end
+
+% --- Plot Pelvis Global Angles ---
+figure('Name', 'Pelvis Global Kinematics (Pedalling Cycles)', 'Color', 'w');
+pelvisFields = {'Tilt', 'Obliquity', 'Rotation'};
+pelvisLabels = {'Pelvic Tilt (Anterior/Posterior)', 'Pelvic Obliquity (Lateral Drop)', 'Pelvic Rotation'};
+
+for i = 1:3
+    subplot(3, 1, i);
+    hold on;
+    fName = pelvisFields{i};
+    
+    % 1. Plot individual cycles in gray
+    plot(tNorm, normPelvis.(fName), 'Color', [0.75 0.75 0.75], 'LineWidth', 0.5);
+    
+    % 2. Plot Standard Deviation Shaded Region
+    curve1 = meanPelvis.(fName) + stdPelvis.(fName);
+    curve2 = meanPelvis.(fName) - stdPelvis.(fName);
+    yConf = [curve1'; flipud(curve2)'];
+    fill(xConf, yConf, [0.85 0.85 0.85], 'FaceAlpha', 0.5, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+    
+    % 3. Plot Mean Curve in Bold Black
+    plot(tNorm, meanPelvis.(fName), 'k', 'LineWidth', 2.5);
+    
+    title(pelvisLabels{i});
+    xlabel('Pedalling Cycle (%)');
+    ylabel('Angle (deg)');
+    xlim([0 100]);
+    grid on;
+end
+
+
+%% ===================================================================== %%
+% VISUALIZATION & PLOTTING
+%% ===================================================================== %%
+N = size(RLthigh, 3);
+time = (0:N-1)'/Fs;
+
+% Plot Left Hip Angles
+plotAngles(time, LHip, 'Left Hip')
+
+% Plot Left Knee Angles
+% plotAngles(time, LKnee, 'Left Knee')
+
+%% ===================================================================== %%
+% DATA EXPORT
+%% ===================================================================== %%
+% Create a temporary matrix for legacy export function compatibility if needed
+
+% N_total = length(time);
+N = size(RLthigh, 3);
+time = (0:N-1)'/Fs;
+LHip_Matrix = [double(LHip.FlexExt), double(LHip.AbdAdd), double(LHip.IntExt)];
+exportExcel(time, LHip_Matrix, fullfile(dataFolder, 'LeftHip_Angles_Output'));
+
+disp('Processing completed successfully. Kinematic plots generated.');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LOCAL HELPER FUNCTIONS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+function Data = loadCleanIMUcsv(filePath)
+    opts = detectImportOptions(filePath, 'Delimiter', ',', 'VariableNamingRule', 'preserve');
+    opts.VariableNamesLine = 1;
+    opts.DataLine = 2;
+    T = readtable(filePath, opts);
+    if all(ismember({'Q0', 'Q1', 'Q2', 'Q3'}, T.Properties.VariableNames))
+        Data.Quat = [T.Q0, T.Q1, T.Q2, T.Q3];
+    else
+        error('The file %s is missing the required columns Q0, Q1, Q2, or Q3.', filePath);
+    end
+end
+
+function PelvisGlobal = computePelvisGlobalAngles(Rpelvis)
+    % Extracts Euler/Cardan angles from the anatomical Pelvis orientation 
+    % relative to the Global Frame (Identity matrix) into the specified structure.
+    N = size(Rpelvis, 3);
+    PelvisGlobal.Tilt      = zeros(N, 1);
+    PelvisGlobal.Obliquity = zeros(N, 1);
+    PelvisGlobal.Rotation  = zeros(N, 1);
+    
+    for i = 1:N
+        R = Rpelvis(:, :, i);
+        [yaw, pitch, roll] = ea2euler(R); 
+        
+        PelvisGlobal.Tilt(i)      = pitch * (180/pi); % Pitch -> Tilt
+        PelvisGlobal.Obliquity(i) = roll * (180/pi);  % Roll -> Obliquity
+        PelvisGlobal.Rotation(i)  = yaw * (180/pi);   % Yaw -> Rotation
+    end
+end
+
+function [yaw, pitch, roll] = ea2euler(R)
+    % ZYX Tait-Bryan sequence extraction helper
+    pitch = -asin(R(3,1));
+    if cos(pitch) > 1e-4
+        yaw   = atan2(R(2,1), R(1,1));
+        roll  = atan2(R(3,2), R(3,3));
+    else
+        yaw   = 0;
+        roll  = atan2(-R(1,2), R(2,2));
+    end
+end
