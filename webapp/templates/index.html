@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Load &amp; Run{% endblock %}
+{% block content %}
+<h1>Data Loading &amp; Initialization</h1>
+<p class="sub">Upload the static calibration recordings and the dynamic cycling recordings, assign each file to a sensor, then run the analysis.</p>
+
+<div class="panel">
+  <h2 style="margin-top:0;border:none;padding:0">Static calibration files</h2>
+  <p class="muted">One static (N-pose) recording per sensor. Used to compute the sensor-to-segment calibration.</p>
+  <label class="drop" id="drop-static">
+    <input type="file" id="file-static" multiple accept=".csv">
+    <strong>Click to choose</strong> or drop static CSV files here
+  </label>
+  <table id="tbl-static" hidden><thead><tr><th>File</th><th>Sensor role</th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="panel">
+  <h2 style="margin-top:0;border:none;padding:0">Dynamic cycling files</h2>
+  <p class="muted">One movement recording per sensor. Joint angles + EMG are computed from these.</p>
+  <label class="drop" id="drop-dynamic">
+    <input type="file" id="file-dynamic" multiple accept=".csv">
+    <strong>Click to choose</strong> or drop dynamic CSV files here
+  </label>
+  <table id="tbl-dynamic" hidden><thead><tr><th>File</th><th>Sensor role</th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <label class="check"><input type="checkbox" id="fix-s2"> Apply S2 axis-swap correction</label>
+    <button class="primary" id="run" disabled>Run analysis</button>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<template id="row-tpl">
+  <tr>
+    <td class="fname"></td>
+    <td>
+      <select class="role">
+        <option value="">— unassigned —</option>
+        {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+      </select>
+    </td>
+  </tr>
+</template>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/page1.js') }}"></script>
+{% endblock %}

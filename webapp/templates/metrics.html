@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Metrics{% endblock %}
+{% block content %}
+<h1>Performance &amp; Variability Indexes</h1>
+<p class="sub">Biomechanical metrics for the pedaling cycle, averaged across detected cycles.</p>
+<div id="metrics"><div class="empty">Loading…</div></div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/metrics.js') }}"></script>
+{% endblock %}

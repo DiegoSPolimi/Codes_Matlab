@@ -68,6 +68,46 @@ def compute_manual_bilateral(pelvis_csv, lthigh_csv, rthigh_csv, calibration,
     }
 
 
+def analyze_session(files_by_role, calibration, reorder=False):
+    """Full bilateral analysis from a role->CSV mapping + calibration dict.
+
+    Computes whatever the available sensors allow:
+      Pelvis (S2), LHip (S2+LT), RHip (S2+RT), LKnee (LT+LShank),
+      RKnee (RT+RShank). All series cropped to the common frame count.
+    Cycles are segmented from a hip-flexion reference (LHip, else RHip).
+
+    Returns a dict with ``time`` (s), ``troughs`` (cycle boundary indices), and
+    each available joint as a sub-dict of angle arrays.
+    """
+    orient = {}
+    for role, path in files_by_role.items():
+        if role in calibration:
+            orient[role] = _orient(path, calibration[role], reorder)
+    if not orient:
+        raise ValueError("No uploaded file matched a calibrated sensor role.")
+
+    n = min(o.shape[0] for o in orient.values())
+    orient = {k: v[:n] for k, v in orient.items()}
+
+    result = {"time": np.arange(n) / FS}
+    if "S2" in orient:
+        result["Pelvis"] = compute_pelvis_global_angles(orient["S2"])
+        if "LT" in orient:
+            result["LHip"] = compute_hip_jcs(orient["S2"], orient["LT"])
+        if "RT" in orient:
+            result["RHip"] = compute_hip_jcs(orient["S2"], orient["RT"])
+    if "LT" in orient and "LShank" in orient:
+        result["LKnee"] = compute_knee_jcs(orient["LT"], orient["LShank"])
+    if "RT" in orient and "RShank" in orient:
+        result["RKnee"] = compute_knee_jcs(orient["RT"], orient["RShank"])
+
+    ref = result.get("LHip") or result.get("RHip")
+    result["troughs"] = (
+        detect_pedalling_cycles(ref["FlexExt"]) if ref is not None else np.array([], dtype=int)
+    )
+    return result
+
+
 def cycle_ensemble(angle_series, field="FlexExt"):
     """Detect cycles from a hip flexion trace and return per-field mean±std.
 

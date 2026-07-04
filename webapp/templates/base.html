@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cycling Kinematics · {% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🚴 Cycling Kinematics</div>
+    <nav>
+      <a href="{{ url_for('page_load') }}"    class="{{ 'on' if active=='load' }}">1 · Load &amp; Run</a>
+      <a href="{{ url_for('page_report') }}"  class="{{ 'on' if active=='report' }}">2 · Time-Series</a>
+      <a href="{{ url_for('page_metrics') }}" class="{{ 'on' if active=='metrics' }}">3 · Metrics</a>
+      <a href="{{ url_for('page_emg') }}"     class="{{ 'on' if active=='emg' }}">4 · EMG</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

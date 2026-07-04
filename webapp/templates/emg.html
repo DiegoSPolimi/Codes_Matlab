@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}EMG{% endblock %}
+{% block content %}
+<h1>EMG Data Analysis</h1>
+<p class="sub">Electromyography envelopes per target muscle — Tensor Fasciae Latae (TFL) and Gluteus Medius — for both legs.</p>
+<div id="emg"><div class="empty">Loading…</div></div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/emg.js') }}"></script>
+{% endblock %}

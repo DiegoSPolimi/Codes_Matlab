@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "webapp",
+      "runtimeExecutable": "/Users/giacomo/Desktop/Codes_Matlab/.venv/bin/python",
+      "runtimeArgs": ["-m", "webapp.app"],
+      "autoPort": true,
+      "port": 5001
+    }
+  ]
+}

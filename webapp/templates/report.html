@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Time-Series{% endblock %}
+{% block content %}
+<h1>Kinematic Time-Series Report</h1>
+<p class="sub">Interactive joint-angle evolution over time. Separate sections for Knee, Hip, and Pelvis (both legs where available).</p>
+<div id="report"><div class="empty">Loading…</div></div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/report.js') }}"></script>
+{% endblock %}
